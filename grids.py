@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import LinearNDInterpolator as interpND
+from scipy.interpolate import interp1d
 from astropy.io import ascii
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter as FSF
@@ -12,6 +13,41 @@ L_sun = 3.9e33 # [erg/s]
 M_sun = 1.99e33 # [g]
 sigma_k = 5.67051e-5 # [erg cm-2 K-4 s-1] Stefan-Boltzman constant
 G = 6.67259e-8 # [cm^3 /g /s^2] Gravitational constant
+
+class IndexInterpolator:
+    '''
+    Object to return fractional distance between grid points of a single grid variable.
+
+    :param parameter_list: list of parameter values
+    :type parameter_list: 1-D list
+    '''
+
+    def __init__(self, parameter_list):
+        self.parameter_list = np.unique(parameter_list)
+        self.index_interpolator = interp1d(self.parameter_list, np.arange(len(self.parameter_list)), kind='linear')
+        pass
+
+    def __call__(self, value):
+        '''
+        Evaluate the interpolator at a parameter.
+
+        :param value:
+        :type value: float
+        :raises C.InterpolationError: if *value* is out of bounds.
+
+        :returns: ((low_val, high_val), (frac_low, frac_high)), the lower and higher bounding points in the grid
+        and the fractional distance (0 - 1) between them and the value.
+        '''
+        try:
+            index = self.index_interpolator(value)
+        except ValueError as e:
+            print("Requested value {} is out of bounds. {}".format(value, e))
+            raise
+        high = np.ceil(index)
+        low = np.floor(index)
+        frac_index = index - low
+        return ((self.parameter_list[low], self.parameter_list[high]), ((1 - frac_index), frac_index))
+
 
 class Base:
     def __init__(self, name, basefmt, age_range, mass_range):
@@ -75,11 +111,16 @@ class Base:
         ax.set_ylabel(r"$M$ [$M_\odot$]")
         fig.savefig(self.outdir + "samples_AM.png")
 
-    def interp_temp(self, T):
-        return self.interp_T(T)
+    def interp_temp(self, p):
+        return self.interp_T(p)
 
-    def interp_radius(self, R):
-        return self.interp_R(R)
+    def interp_radius(self, p):
+        return self.interp_R(p)
+
+    def interp_lum(self, p):
+        # The interpolator self.interp_L is designed to interpolate in log10 space, since
+        # this is probably smoother.
+        return 10**self.interp_L(p) # [L_sun]
 
     def plot_temp(self):
         num = 50
@@ -128,6 +169,74 @@ class Base:
 
         fig.savefig(self.outdir + "radius.png")
 
+
+    def setup_interpolator(self):
+        pass
+
+        # Identify the unique masses
+        umasses = np.unique(self.masses)
+
+        # Create an index interpolator for umasses.
+        self.mass_interp = IndexInterpolator(umasses)
+
+        self.T_interpolators = {}
+        self.ll_interpolators = {}
+
+        for mass in umasses:
+
+            ind = np.isclose(self.masses, mass)
+
+            # Find all the ages that correspond to this mass
+            ages = self.ages[ind]
+
+            # Sort them in increasing order
+            ind2 = np.argsort(ages)
+
+            # Find all the temps that correspond to this mass
+            # Find all the ll that correspond to this mass
+            # Sort all of these according to increasing ages
+            temps = self.temps[ind][ind2]
+            lls = self.lums[ind][ind2]
+
+            # Fit a linear interpolator for t(age) and ll(age), store these in an array
+            self.T_interpolators[mass] = interp1d(ages, temps)
+            self.ll_interpolators[mass] = interp1d(ages, lls)
+
+
+
+    def interp_T_smooth(self, p):
+        '''p is [age, mass] '''
+
+        age, mass = p
+
+        # First identify the upper and lower masses
+        (low_val, high_val), (frac_low, frac_high) = self.mass_interp(mass)
+
+        T_high = self.T_interpolators[high_val](age)
+        T_low = self.T_interpolators[low_val](age)
+
+        # Weighted average estimates for age based on how close.
+        T = frac_low * T_low + frac_high * T_high
+
+        return T
+
+    def interp_ll_smooth(self, p):
+        '''p is [age, mass] '''
+
+        age, mass = p
+
+        # First identify the upper and lower masses
+        (low_val, high_val), (frac_low, frac_high) = self.mass_interp(mass)
+
+        ll_high = self.ll_interpolators[high_val](age)
+        ll_low = self.ll_interpolators[low_val](age)
+
+        # Weighted average estimates for age based on how close.
+        ll = frac_low * ll_low + frac_high * ll_high
+
+        return ll
+
+
 class DartmouthPMS(Base):
     def __init__(self, age_range, mass_range):
         super().__init__(name="DartmouthPMS", basefmt="data/Dartmouth/PMS/fehp00afep0/m{:0>3.0f}fehp00afep0.jc2mass", age_range=age_range, mass_range=mass_range)
@@ -145,6 +254,7 @@ class DartmouthPMS(Base):
         age_list = []
         temp_list = []
         radius_list = []
+        lum_list = []
 
         for mass in masses:
 
@@ -159,20 +269,25 @@ class DartmouthPMS(Base):
             temp = 10**data["LTeff"][ind] # [K]
             radius = np.sqrt(G * mass * M_sun / (10**data["logg"][ind])) / R_sun # [R_sun]
 
+            LL = data["LL"][ind] # [L_sun]
+
             mass_list.append(mass * np.ones(np.sum(ind)))
             age_list.append(age)
             temp_list.append(temp)
             radius_list.append(radius)
+            lum_list.append(LL)
 
         self.masses = np.concatenate(mass_list)
         self.ages = np.concatenate(age_list)
         self.temps = np.concatenate(temp_list)
         self.radii = np.concatenate(radius_list)
+        self.lums = np.concatenate(lum_list)
 
         self.points = np.array([self.ages, self.masses]).T
 
         self.interp_T = interpND(self.points, self.temps)
         self.interp_R = interpND(self.points, self.radii)
+        self.interp_L = interpND(self.points, self.lums)
 
 class PISA(Base):
     def __init__(self, age_range, mass_range):
@@ -190,6 +305,7 @@ class PISA(Base):
         age_list = []
         temp_list = []
         radius_list = []
+        lum_list = []
 
         for mass in masses:
 
@@ -210,16 +326,19 @@ class PISA(Base):
             age_list.append(age)
             temp_list.append(temp)
             radius_list.append(radius)
+            lum_list.append(data["LL"][ind]) # log10(L_sun)
 
         self.masses = np.concatenate(mass_list)
         self.ages = np.concatenate(age_list)
         self.temps = np.concatenate(temp_list)
         self.radii = np.concatenate(radius_list)
+        self.lums = np.concatenate(lum_list)
 
         self.points = np.array([self.ages, self.masses]).T
 
         self.interp_T = interpND(self.points, self.temps)
         self.interp_R = interpND(self.points, self.radii)
+        self.interp_L = interpND(self.points, self.lums)
 
 class Baraffe15(Base):
     def __init__(self, age_range, mass_range):
@@ -239,6 +358,7 @@ class Baraffe15(Base):
         age_list = []
         temp_list = []
         radius_list = []
+        lum_list = []
 
         for age in ages:
 
@@ -252,21 +372,25 @@ class Baraffe15(Base):
             mass = mass[ind] # [M_sun]
             temp = data["Teff"][ind] # [K]
             radius = data["radius"][ind] # R_sun
+            LL = data["L"][ind] # L_sun
 
             mass_list.append(mass)
             age_list.append(age * np.ones(np.sum(ind)))
             temp_list.append(temp)
             radius_list.append(radius)
+            lum_list.append(LL)
 
         self.masses = np.concatenate(mass_list)
         self.ages = np.concatenate(age_list)
         self.temps = np.concatenate(temp_list)
         self.radii = np.concatenate(radius_list)
+        self.lums = np.concatenate(lum_list)
 
         self.points = np.array([self.ages, self.masses]).T
 
         self.interp_T = interpND(self.points, self.temps)
         self.interp_R = interpND(self.points, self.radii)
+        self.interp_L = interpND(self.points, self.lums)
 
 class Seiss(Base):
     def __init__(self, age_range, mass_range):
@@ -285,6 +409,7 @@ class Seiss(Base):
         age_list = []
         temp_list = []
         radius_list = []
+        lum_list = []
 
         for mass in masses:
 
@@ -309,17 +434,20 @@ class Seiss(Base):
             age_list.append(age)
             temp_list.append(temp)
             radius_list.append(radius)
+            lum_list.append(np.log10(data["L"][ind]))
 
 
         self.masses = np.concatenate(mass_list)
         self.ages = np.concatenate(age_list)
         self.temps = np.concatenate(temp_list)
         self.radii = np.concatenate(radius_list)
+        self.lums = np.concatenate(lum_list)
 
         self.points = np.array([self.ages, self.masses]).T
 
         self.interp_T = interpND(self.points, self.temps)
         self.interp_R = interpND(self.points, self.radii)
+        self.interp_L = interpND(self.points, self.lums)
 
 def cartesian(arrays, out=None):
     """

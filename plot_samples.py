@@ -17,7 +17,7 @@ def plot(flatchain, format=".png"):
 
     labels = [r"$\tau$ [Myr]", r"$M$ [$M_\odot$]"]
     figure = triangle.corner(flatchain, quantiles=[0.16, 0.5, 0.84],
-        plot_contours=True, plot_datapoints=False, labels=labels, show_titles=True, extents=[(6, 30), (1.1 ,1.6)])
+        plot_contours=True, plot_datapoints=False, labels=labels, show_titles=True)
     figure.savefig("triangle" + format)
 
 def plot_gp(flatchain, format=".png"):
@@ -33,6 +33,7 @@ def plot_gp(flatchain, format=".png"):
 def main():
     # plot(npread("eparams_emcee.npy"))
     plot(npread("eparams_emcee.npy"))
+    # plot(npread("eparams_L.npy"))
 
 if __name__=="__main__":
     main()
