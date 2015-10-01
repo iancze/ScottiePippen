@@ -5,11 +5,12 @@ from emcee import EnsembleSampler
 
 from grids import DartmouthPMS, PISA, Baraffe15, Seiss
 
-# grid = DartmouthPMS(age_range=[0.1, 100], mass_range=[0.1, 1.5])
-# grid = PISA(age_range=[0.1, 100], mass_range=[0.1, 1.5])
+# grid = DartmouthPMS(age_range=[0.1, 100], mass_range=[0.1, 1.8])
+# grid = PISA(age_range=[0.1, 100], mass_range=[0.1, 1.8])
 # grid = Baraffe15(age_range=[0.1, 100], mass_range=[0.1, 1.4])
-grid = Seiss(age_range=[0.1, 100], mass_range=[0.1, 1.4])
+grid = Seiss(age_range=[0.1, 100], mass_range=[0.1, 1.8])
 grid.load()
+grid.setup_interpolator()
 
 def lnprob_TR(p):
 
@@ -48,22 +49,35 @@ def lnprob_TL(p):
 
     # p = np.array([age, mass])
 
-    # Using linear interpolators, determine temperature and luminosity from age and mass
-    temp = grid.interp_temp(p)
-    lum = grid.interp_L(p) #[L_sun]
+    # print("Sample p", p)
+    age, mass = p
+    if age < 0.0 or mass < 0.0:
+        return -np.inf
+
+
+    # Using smooth interpolators, determine temperature and log luminosity from age and mass
+    temp = grid.interp_T_smooth(p) # [K]
+    ll = grid.interp_ll_smooth(p) # Log10(L/L_sun) for a single star
+
+    # print("temp", temp)
+    # print("ll", ll)
 
     # OK To return NaN for grid search, but not for MCMC sampling
-    if np.isnan(temp) or np.isnan(lum):
+    if np.isnan(temp) or np.isnan(ll):
         # return np.nan
         return -np.inf
 
     # Covariance matrix determined from SED modeling estimate
-    # log10(temp), log10(L)
-    x = np.concatenate([np.log10(temp), lum])
+    x = np.array([temp, ll])
 
-    # Determined using SED modeling
-    mu = np.array([3.5855, -0.395])
-    Sigma = np.array([[0.0237**2, 0.0], [0.0, 0.164**2]])
+    # Determined using SED modeling from AK Sco
+    mu = np.array([6.36225305e+03, 7.75636071e-01 - np.log10(2)]) # Divide luminosity in half
+    Sigma = np.array([[2.40799517e+04, 6.53674282e+00],
+    [6.53674282e+00, 3.31446535e-03]])
+
+    #
+    # mu = np.array([3.5855, -0.395])
+    # Sigma = np.array([[0.0237**2, 0.0], [0.0, 0.164**2]])
 
     R = x - mu # Residual vector
     invSigma = np.linalg.inv(Sigma)
@@ -108,8 +122,8 @@ def sample_lnp():
     ndim = 2
     nwalkers = 10 * ndim
 
-    p0 = np.array([np.random.uniform(1, 10, nwalkers),
-                    np.random.uniform(0.3, 0.7, nwalkers)]).T
+    p0 = np.array([np.random.uniform(1, 20, nwalkers),
+                    np.random.uniform(1.0, 1.3, nwalkers)]).T
 
     sampler = EnsembleSampler(nwalkers, ndim, lnprob_TL)
 
@@ -168,8 +182,8 @@ def sample_TL():
 
 
 def main():
-    # sample_lnp()
-    sample_TL()
+    sample_lnp()
+    # sample_TL()
 
 if __name__=="__main__":
     main()

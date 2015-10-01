@@ -56,10 +56,8 @@ class Base:
         self.age_range = age_range
         self.mass_range = mass_range
 
-        # Make a subdirectory for plots
-        self.outdir = "plots/" + self.name + "/"
-        if not os.path.exists(self.outdir):
-            os.mkdir(self.outdir)
+        self.load()
+        self.setup_interpolator()
 
     def load(self):
         print("Load function must be defined by a subclass.")
@@ -72,106 +70,18 @@ class Base:
         # Put these arrays into the interpolators. Interpolators always take an (Age, Mass) pair,
         # in that order.
 
-    def scatter_TR(self):
-        fig, ax = plt.subplots(nrows=1, figsize=(4,4))
-
-        ax.plot(self.temps, self.radii, "k.", alpha=0.5, ms=1.0)
-
-        # Label the tau0, M points
-        masses = np.unique(self.masses)
-
-        for mass in masses:
-            # Find all T, R that have this mass
-            ind = (self.masses == mass)
-            tt = self.temps[ind]
-            rr = self.radii[ind]
-            ax.annotate("{:.1f}".format(mass), (tt[0], rr[0]), size=5)
-
-        # Annotate the most massive with start and end ages
-        max_mass = np.max(self.masses)
-        ind = (self.masses == mass)
-        tt = self.temps[ind]
-        rr = self.radii[ind]
-        ages = self.ages[ind]
-
-        ax.annotate(r"$\tau_0 = {:.1f}$ Myr".format(ages[0]), (tt[0], rr[0] + 0.1), size=5)
-        ax.annotate(r"$\tau = {:.1f}$ Myr".format(ages[-1]), (tt[-1], rr[-1]), size=5)
-
-        ax.set_xlim(np.max(self.temps), np.min(self.temps))
-        ax.set_xlabel(r"$T_\textrm{eff}$ [K]")
-        ax.xaxis.set_major_formatter(FSF("%.0f"))
-        ax.xaxis.set_major_locator(MultipleLocator(1000))
-        ax.set_ylabel(r"$R$ [$R_\odot$]")
-        fig.savefig(self.outdir + "samples_TR.png")
-
-    def scatter_AM(self):
-        fig, ax = plt.subplots(nrows=1, figsize=(4,4))
-        ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
-        ax.set_xlabel(r"$\tau$ [Myr]")
-        ax.set_ylabel(r"$M$ [$M_\odot$]")
-        fig.savefig(self.outdir + "samples_AM.png")
-
-    def interp_temp(self, p):
-        return self.interp_T(p)
-
-    def interp_radius(self, p):
-        return self.interp_R(p)
-
-    def interp_lum(self, p):
-        # The interpolator self.interp_L is designed to interpolate in log10 space, since
-        # this is probably smoother.
-        return 10**self.interp_L(p) # [L_sun]
-
-    def plot_temp(self):
-        num = 50
-        aa = np.linspace(np.min(self.ages), np.max(self.ages), num=num)
-        mm = np.linspace(np.min(self.masses), np.max(self.masses), num=num)
-        pp = cartesian([aa, mm]) # List of [[x_0, y_0], [x_1, y_1], ...]
-
-        tt = self.interp_temp(pp)
-
-        # Reshape for the sake of an image
-        tt.shape = (num, num)
-
-        # Transpose
-        tt = tt.T
-
-        fig, ax = plt.subplots(nrows=1, figsize=(4,4))
-        ext = [np.min(aa), np.max(aa), np.min(mm), np.max(mm)]
-        img = ax.imshow(tt, origin="lower", extent=ext, interpolation="none", aspect="auto")
-
-        ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
-        ax.set_xlabel(r"$\tau$ [Myr]")
-        ax.set_ylabel(r"$M$ [$M_\odot$]")
-        cb = fig.colorbar(img, format="%.0f")
-        cb.set_label(r"$T_\textrm{eff}$ [K]")
-
-        fig.savefig(self.outdir + "temp.png")
-
-    def plot_radius(self):
-        num = 50
-        aa = np.linspace(np.min(self.ages), np.max(self.ages), num=num)
-        mm = np.linspace(np.min(self.masses), np.max(self.masses), num=num)
-        pp = cartesian([aa, mm])
-
-        # print(pp.reshape(num, num))
-        rr = self.interp_radius(pp).reshape(num,num).T # Reshape for the sake of an image
-
-        fig, ax = plt.subplots(nrows=1, figsize=(4,4))
-        ext = [np.min(aa), np.max(aa), np.min(mm), np.max(mm)]
-        img = ax.imshow(rr, origin="lower", extent=ext, interpolation="none", aspect="auto")
-
-        ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
-        ax.set_xlabel(r"$\tau$ [Myr]")
-        ax.set_ylabel(r"$M$ [$M_\odot$]")
-        cb = fig.colorbar(img, format="%.1f")
-        cb.set_label(r"$R$ [$R_\odot$]")
-
-        fig.savefig(self.outdir + "radius.png")
-
-
     def setup_interpolator(self):
-        pass
+        '''
+        Once all of the data files have been loaded into memory using grid.load() (implemented by the subclass), then call this function to actually setup the two stage interpolation necessary for smooth contours.
+
+        This works this way because all grids provide stars at set mass locations, and then as the age evolves, predict different stellar properties, such as Teff and (log) Luminosity.
+
+        This means if we want to query (T,L) for a given (tau, M), we shouldn't just do a bi-linear interpolation between (T,L) points like we were doing before.
+
+        Instead, we should find the two mass points in the grid that bracket M, call them M_low and M_high. Then, interpolate T and L for (tau, M_low) and (tau, M_high).
+
+        Finally, then interpolate T and L from the (T,L)'s corresponding to (tau, M_low) and (tau, M_high) for M.
+        '''
 
         # Identify the unique masses
         umasses = np.unique(self.masses)
@@ -194,6 +104,7 @@ class Base:
 
             # Find all the temps that correspond to this mass
             # Find all the ll that correspond to this mass
+
             # Sort all of these according to increasing ages
             temps = self.temps[ind][ind2]
             lls = self.lums[ind][ind2]
@@ -203,38 +114,145 @@ class Base:
             self.ll_interpolators[mass] = interp1d(ages, lls)
 
 
-
-    def interp_T_smooth(self, p):
+    def interp_T(self, p):
         '''p is [age, mass] '''
 
         age, mass = p
 
-        # First identify the upper and lower masses
-        (low_val, high_val), (frac_low, frac_high) = self.mass_interp(mass)
+        try:
+            # First identify the upper and lower masses
+            (low_val, high_val), (frac_low, frac_high) = self.mass_interp(mass)
 
-        T_high = self.T_interpolators[high_val](age)
-        T_low = self.T_interpolators[low_val](age)
+            T_high = self.T_interpolators[high_val](age)
+            T_low = self.T_interpolators[low_val](age)
+        except ValueError:
+            # This means we must be out of range of the grid.
+            return np.nan
 
         # Weighted average estimates for age based on how close.
         T = frac_low * T_low + frac_high * T_high
 
         return T
 
-    def interp_ll_smooth(self, p):
+    def interp_ll(self, p):
         '''p is [age, mass] '''
 
         age, mass = p
 
-        # First identify the upper and lower masses
-        (low_val, high_val), (frac_low, frac_high) = self.mass_interp(mass)
+        try:
+            # First identify the upper and lower masses
+            (low_val, high_val), (frac_low, frac_high) = self.mass_interp(mass)
 
-        ll_high = self.ll_interpolators[high_val](age)
-        ll_low = self.ll_interpolators[low_val](age)
+            ll_high = self.ll_interpolators[high_val](age)
+            ll_low = self.ll_interpolators[low_val](age)
+        except ValueError:
+            # This means we must be out of range of the grid.
+            return np.nan
 
         # Weighted average estimates for age based on how close.
         ll = frac_low * ll_low + frac_high * ll_high
 
         return ll
+
+
+    # def scatter_TR(self, fname):
+    #     fig, ax = plt.subplots(nrows=1, figsize=(4,4))
+    #
+    #     ax.plot(self.temps, self.radii, "k.", alpha=0.5, ms=1.0)
+    #
+    #     # Label the tau0, M points
+    #     masses = np.unique(self.masses)
+    #
+    #     for mass in masses:
+    #         # Find all T, R that have this mass
+    #         ind = (self.masses == mass)
+    #         tt = self.temps[ind]
+    #         rr = self.radii[ind]
+    #         ax.annotate("{:.1f}".format(mass), (tt[0], rr[0]), size=5)
+    #
+    #     # Annotate the most massive with start and end ages
+    #     max_mass = np.max(self.masses)
+    #     ind = (self.masses == mass)
+    #     tt = self.temps[ind]
+    #     rr = self.radii[ind]
+    #     ages = self.ages[ind]
+    #
+    #     ax.annotate(r"$\tau_0 = {:.1f}$ Myr".format(ages[0]), (tt[0], rr[0] + 0.1), size=5)
+    #     ax.annotate(r"$\tau = {:.1f}$ Myr".format(ages[-1]), (tt[-1], rr[-1]), size=5)
+    #
+    #     ax.set_xlim(np.max(self.temps), np.min(self.temps))
+    #     ax.set_xlabel(r"$T_\textrm{eff}$ [K]")
+    #     ax.xaxis.set_major_formatter(FSF("%.0f"))
+    #     ax.xaxis.set_major_locator(MultipleLocator(1000))
+    #     ax.set_ylabel(r"$R$ [$R_\odot$]")
+    #     fig.savefig(fname)
+    #
+    # def scatter_AM(self, fname):
+    #     fig, ax = plt.subplots(nrows=1, figsize=(4,4))
+    #     ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
+    #     ax.set_xlabel(r"$\tau$ [Myr]")
+    #     ax.set_ylabel(r"$M$ [$M_\odot$]")
+    #     fig.savefig(fname)
+    #
+    # def interp_temp(self, p):
+    #     return self.interp_T(p)
+    #
+    # def interp_radius(self, p):
+    #     return self.interp_R(p)
+    #
+    # def interp_lum(self, p):
+    #     # The interpolator self.interp_L is designed to interpolate in log10 space, since
+    #     # this is probably smoother.
+    #     return 10**self.interp_L(p) # [L_sun]
+    #
+    # def plot_temp(self, fname):
+    #     num = 50
+    #     aa = np.linspace(np.min(self.ages), np.max(self.ages), num=num)
+    #     mm = np.linspace(np.min(self.masses), np.max(self.masses), num=num)
+    #     pp = cartesian([aa, mm]) # List of [[x_0, y_0], [x_1, y_1], ...]
+    #
+    #     tt = self.interp_temp(pp)
+    #
+    #     # Reshape for the sake of an image
+    #     tt.shape = (num, num)
+    #
+    #     # Transpose
+    #     tt = tt.T
+    #
+    #     fig, ax = plt.subplots(nrows=1, figsize=(4,4))
+    #     ext = [np.min(aa), np.max(aa), np.min(mm), np.max(mm)]
+    #     img = ax.imshow(tt, origin="lower", extent=ext, interpolation="none", aspect="auto")
+    #
+    #     ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
+    #     ax.set_xlabel(r"$\tau$ [Myr]")
+    #     ax.set_ylabel(r"$M$ [$M_\odot$]")
+    #     cb = fig.colorbar(img, format="%.0f")
+    #     cb.set_label(r"$T_\textrm{eff}$ [K]")
+    #
+    #     fig.savefig(fname)
+    #
+    # def plot_radius(self, fname):
+    #     num = 50
+    #     aa = np.linspace(np.min(self.ages), np.max(self.ages), num=num)
+    #     mm = np.linspace(np.min(self.masses), np.max(self.masses), num=num)
+    #     pp = cartesian([aa, mm])
+    #
+    #     # print(pp.reshape(num, num))
+    #     rr = self.interp_radius(pp).reshape(num,num).T # Reshape for the sake of an image
+    #
+    #     fig, ax = plt.subplots(nrows=1, figsize=(4,4))
+    #     ext = [np.min(aa), np.max(aa), np.min(mm), np.max(mm)]
+    #     img = ax.imshow(rr, origin="lower", extent=ext, interpolation="none", aspect="auto")
+    #
+    #     ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
+    #     ax.set_xlabel(r"$\tau$ [Myr]")
+    #     ax.set_ylabel(r"$M$ [$M_\odot$]")
+    #     cb = fig.colorbar(img, format="%.1f")
+    #     cb.set_label(r"$R$ [$R_\odot$]")
+    #
+    #     fig.savefig(fname)
+    #
+
 
 
 class DartmouthPMS(Base):
@@ -285,9 +303,9 @@ class DartmouthPMS(Base):
 
         self.points = np.array([self.ages, self.masses]).T
 
-        self.interp_T = interpND(self.points, self.temps)
-        self.interp_R = interpND(self.points, self.radii)
-        self.interp_L = interpND(self.points, self.lums)
+        # self.interp_T = interpND(self.points, self.temps)
+        # self.interp_R = interpND(self.points, self.radii)
+        # self.interp_L = interpND(self.points, self.lums)
 
 class PISA(Base):
     def __init__(self, age_range, mass_range):
@@ -336,9 +354,9 @@ class PISA(Base):
 
         self.points = np.array([self.ages, self.masses]).T
 
-        self.interp_T = interpND(self.points, self.temps)
-        self.interp_R = interpND(self.points, self.radii)
-        self.interp_L = interpND(self.points, self.lums)
+        # self.interp_T = interpND(self.points, self.temps)
+        # self.interp_R = interpND(self.points, self.radii)
+        # self.interp_L = interpND(self.points, self.lums)
 
 class Baraffe15(Base):
     def __init__(self, age_range, mass_range):
@@ -388,9 +406,9 @@ class Baraffe15(Base):
 
         self.points = np.array([self.ages, self.masses]).T
 
-        self.interp_T = interpND(self.points, self.temps)
-        self.interp_R = interpND(self.points, self.radii)
-        self.interp_L = interpND(self.points, self.lums)
+        # self.interp_T = interpND(self.points, self.temps)
+        # self.interp_R = interpND(self.points, self.radii)
+        # self.interp_L = interpND(self.points, self.lums)
 
 class Seiss(Base):
     def __init__(self, age_range, mass_range):
@@ -445,9 +463,9 @@ class Seiss(Base):
 
         self.points = np.array([self.ages, self.masses]).T
 
-        self.interp_T = interpND(self.points, self.temps)
-        self.interp_R = interpND(self.points, self.radii)
-        self.interp_L = interpND(self.points, self.lums)
+        # self.interp_T = interpND(self.points, self.temps)
+        # self.interp_R = interpND(self.points, self.radii)
+        # self.interp_L = interpND(self.points, self.lums)
 
 def cartesian(arrays, out=None):
     """
@@ -502,12 +520,13 @@ def cartesian(arrays, out=None):
     return out
 
 def main():
-    grid = Seiss(age_range=[1, 100], mass_range=[0.5, 2.0])
-    grid.load()
-    grid.scatter_TR()
-    grid.scatter_AM()
-    grid.plot_temp()
-    grid.plot_radius()
+    pass
+    # grid = Seiss(age_range=[1, 100], mass_range=[0.5, 2.0])
+    # grid.load()
+    # grid.scatter_TR()
+    # grid.scatter_AM()
+    # grid.plot_temp()
+    # grid.plot_radius()
 
 if __name__=="__main__":
     main()
