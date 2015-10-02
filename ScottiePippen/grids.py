@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.interpolate import LinearNDInterpolator as interpND
+# from scipy.interpolate import LinearNDInterpolator as interpND
 from scipy.interpolate import interp1d
 from astropy.io import ascii
 import matplotlib.pyplot as plt
@@ -90,7 +90,7 @@ class Base:
         self.mass_interp = IndexInterpolator(umasses)
 
         self.T_interpolators = {}
-        self.ll_interpolators = {}
+        self.lL_interpolators = {}
 
         for mass in umasses:
 
@@ -107,11 +107,11 @@ class Base:
 
             # Sort all of these according to increasing ages
             temps = self.temps[ind][ind2]
-            lls = self.lums[ind][ind2]
+            lLs = self.lums[ind][ind2]
 
             # Fit a linear interpolator for t(age) and ll(age), store these in an array
             self.T_interpolators[mass] = interp1d(ages, temps)
-            self.ll_interpolators[mass] = interp1d(ages, lls)
+            self.lL_interpolators[mass] = interp1d(ages, lLs)
 
 
     def interp_T(self, p):
@@ -134,7 +134,7 @@ class Base:
 
         return T
 
-    def interp_ll(self, p):
+    def interp_lL(self, p):
         '''p is [age, mass] '''
 
         age, mass = p
@@ -143,16 +143,16 @@ class Base:
             # First identify the upper and lower masses
             (low_val, high_val), (frac_low, frac_high) = self.mass_interp(mass)
 
-            ll_high = self.ll_interpolators[high_val](age)
-            ll_low = self.ll_interpolators[low_val](age)
+            lL_high = self.lL_interpolators[high_val](age)
+            lL_low = self.lL_interpolators[low_val](age)
         except ValueError:
             # This means we must be out of range of the grid.
             return np.nan
 
         # Weighted average estimates for age based on how close.
-        ll = frac_low * ll_low + frac_high * ll_high
+        lL = frac_low * lL_low + frac_high * lL_high
 
-        return ll
+        return lL
 
 
     # def scatter_TR(self, fname):
@@ -257,7 +257,7 @@ class Base:
 
 class DartmouthPMS(Base):
     def __init__(self, age_range, mass_range):
-        super().__init__(name="DartmouthPMS", basefmt="data/Dartmouth/PMS/fehp00afep0/m{:0>3.0f}fehp00afep0.jc2mass", age_range=age_range, mass_range=mass_range)
+        super().__init__(name="DartmouthPMS", basefmt="/home/ian/Grad/Research/Stars/ScottiePippen/data/Dartmouth/PMS/fehp00afep0/m{:0>3.0f}fehp00afep0.jc2mass", age_range=age_range, mass_range=mass_range)
 
     def load(self):
         # Dartmouth masses
@@ -309,7 +309,7 @@ class DartmouthPMS(Base):
 
 class PISA(Base):
     def __init__(self, age_range, mass_range):
-        super().__init__(name="PISA", basefmt="data/PISA/Z0.02000_Y0.2880_XD2E5_ML1.68_AS05/TRK_M{:.2f}_Z0.02000_Y0.2880_XD2E5_ML1.68_AS05.DAT", age_range=age_range, mass_range=mass_range)
+        super().__init__(name="PISA", basefmt="/home/ian/Grad/Research/Stars/ScottiePippen/data/PISA/Z0.02000_Y0.2880_XD2E5_ML1.68_AS05/TRK_M{:.2f}_Z0.02000_Y0.2880_XD2E5_ML1.68_AS05.DAT", age_range=age_range, mass_range=mass_range)
 
     def load(self):
         masses = np.concatenate((np.arange(0.2, 1., 0.05), np.arange(1.0, 2., 0.1), np.arange(2., 4., 0.2), np.arange(4.0, 7.1, 0.5)))
@@ -360,7 +360,7 @@ class PISA(Base):
 
 class Baraffe15(Base):
     def __init__(self, age_range, mass_range):
-        super().__init__(name="Baraffe15", basefmt="data/Baraffe15/{:.4f}.dat", age_range=age_range, mass_range=mass_range)
+        super().__init__(name="Baraffe15", basefmt="/home/ian/Grad/Research/Stars/ScottiePippen/data/Baraffe15/{:.4f}.dat", age_range=age_range, mass_range=mass_range)
 
     def load(self):
         # In Myr
@@ -412,7 +412,7 @@ class Baraffe15(Base):
 
 class Seiss(Base):
     def __init__(self, age_range, mass_range):
-        super().__init__(name="Seiss", basefmt="data/Seiss/m{:.1f}z02.hrd", age_range=age_range, mass_range=mass_range)
+        super().__init__(name="Seiss", basefmt="/home/ian/Grad/Research/Stars/ScottiePippen/data/Seiss/m{:.1f}z02.hrd", age_range=age_range, mass_range=mass_range)
 
     def load(self):
         # In Myr
@@ -466,6 +466,10 @@ class Seiss(Base):
         # self.interp_T = interpND(self.points, self.temps)
         # self.interp_R = interpND(self.points, self.radii)
         # self.interp_L = interpND(self.points, self.lums)
+
+
+model_dict = {"DartmouthPMS":DartmouthPMS, "PISA":PISA, "Baraffe15": Baraffe15, "Seiss":Seiss}
+
 
 def cartesian(arrays, out=None):
     """

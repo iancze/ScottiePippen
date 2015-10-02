@@ -11,3 +11,8 @@
 * Dartmouth: [PMS models](http://stellar.dartmouth.edu/~models/fehp00afep0.html) [MS models](http://stellar.dartmouth.edu/models/grid.html)
 
 The Dartmouth models provide two different age ranges in separate files.
+
+
+Install this package via
+
+    python setup.py develop
