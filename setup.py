@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-import ez_setup
-ez_setup.use_setuptools()
-
 from setuptools import setup
 
 setup(name='ScottiePippen',
@@ -10,6 +7,8 @@ setup(name='ScottiePippen',
     description="Determine stellar age and mass from measurements of log L and T eff.",
     author="Ian Czekala",
     author_email="iancze@gmail.com",
+    url="https://github.com/iancze/ScottiePippen",
+    license="MIT",
     packages=["ScottiePippen"],
-    requires=['numpy', 'scipy']
+    requires=['numpy', 'scipy', 'astropy']
     )

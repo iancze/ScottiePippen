@@ -1,0 +1,48 @@
+name: DQTau
+
+# You can specify which of these we have reported in the literature, then use convert samples.
+# Otherwise, if I've modeled this myself, just use the raw posteriors and skip this step.
+# Assumes all of these are described by a Gaussian with [mean, sigma]
+# logT: [3.5855, 0.0237] # log10(T/K)
+# Teff: [] # K
+# L: [] # L_sun
+# lL: [-0.395, 0.164] # log10(L/L_sun)
+
+# The samples of Temperature and log10 Luminosity from the photometry and spectroscopy
+TlL_samples: TlL.npy
+
+# If the samples are more than this number, just use the values before cutoff.
+# This is to speed the KDE estimation
+cutoff: 8000
+
+# List of grids, possible values include
+grids: ["DartmouthPMS", "PISA", "Baraffe15", "Seiss"]
+# grids: ["DartmouthPMS"]
+
+DartmouthPMS:
+  age_range: [0.1, 100]
+  mass_range: [0.1, 1.8]
+
+PISA:
+  age_range: [0.1, 100]
+  mass_range: [0.1, 1.8]
+
+Baraffe15:
+  age_range: [0.1, 100]
+  mass_range: [0.1, 1.4]
+
+Seiss:
+  age_range: [0.1, 100]
+  mass_range: [0.1, 1.8]
+
+walkers_per_dim: 10
+
+# burn_in: 1000
+samples: 8000
+
+#Starting guesses drawn from this uniform range.
+age_guess : [1., 10.] #Myr
+mass_guess : [0.4, 0.8 ] #M_sun
+
+# The file to save the samples for the
+outfile: tauMass_{}.npy

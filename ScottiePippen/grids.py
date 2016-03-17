@@ -1,18 +1,8 @@
 import numpy as np
-# from scipy.interpolate import LinearNDInterpolator as interpND
 from scipy.interpolate import interp1d
 from astropy.io import ascii
-import matplotlib.pyplot as plt
-from matplotlib.ticker import FormatStrFormatter as FSF
-from matplotlib.ticker import MultipleLocator
-import os
 
-pc = 3.086e18 # [cm]
-R_sun = 6.96e10 # [cm]
-L_sun = 3.9e33 # [erg/s]
-M_sun = 1.99e33 # [g]
-sigma_k = 5.67051e-5 # [erg cm-2 K-4 s-1] Stefan-Boltzman constant
-G = 6.67259e-8 # [cm^3 /g /s^2] Gravitational constant
+import ScottiePippen as SP
 
 class IndexInterpolator:
     '''
@@ -25,7 +15,6 @@ class IndexInterpolator:
     def __init__(self, parameter_list):
         self.parameter_list = np.unique(parameter_list)
         self.index_interpolator = interp1d(self.parameter_list, np.arange(len(self.parameter_list)), kind='linear')
-        pass
 
     def __call__(self, value):
         '''
@@ -155,109 +144,9 @@ class Base:
         return lL
 
 
-    # def scatter_TR(self, fname):
-    #     fig, ax = plt.subplots(nrows=1, figsize=(4,4))
-    #
-    #     ax.plot(self.temps, self.radii, "k.", alpha=0.5, ms=1.0)
-    #
-    #     # Label the tau0, M points
-    #     masses = np.unique(self.masses)
-    #
-    #     for mass in masses:
-    #         # Find all T, R that have this mass
-    #         ind = (self.masses == mass)
-    #         tt = self.temps[ind]
-    #         rr = self.radii[ind]
-    #         ax.annotate("{:.1f}".format(mass), (tt[0], rr[0]), size=5)
-    #
-    #     # Annotate the most massive with start and end ages
-    #     max_mass = np.max(self.masses)
-    #     ind = (self.masses == mass)
-    #     tt = self.temps[ind]
-    #     rr = self.radii[ind]
-    #     ages = self.ages[ind]
-    #
-    #     ax.annotate(r"$\tau_0 = {:.1f}$ Myr".format(ages[0]), (tt[0], rr[0] + 0.1), size=5)
-    #     ax.annotate(r"$\tau = {:.1f}$ Myr".format(ages[-1]), (tt[-1], rr[-1]), size=5)
-    #
-    #     ax.set_xlim(np.max(self.temps), np.min(self.temps))
-    #     ax.set_xlabel(r"$T_\textrm{eff}$ [K]")
-    #     ax.xaxis.set_major_formatter(FSF("%.0f"))
-    #     ax.xaxis.set_major_locator(MultipleLocator(1000))
-    #     ax.set_ylabel(r"$R$ [$R_\odot$]")
-    #     fig.savefig(fname)
-    #
-    # def scatter_AM(self, fname):
-    #     fig, ax = plt.subplots(nrows=1, figsize=(4,4))
-    #     ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
-    #     ax.set_xlabel(r"$\tau$ [Myr]")
-    #     ax.set_ylabel(r"$M$ [$M_\odot$]")
-    #     fig.savefig(fname)
-    #
-    # def interp_temp(self, p):
-    #     return self.interp_T(p)
-    #
-    # def interp_radius(self, p):
-    #     return self.interp_R(p)
-    #
-    # def interp_lum(self, p):
-    #     # The interpolator self.interp_L is designed to interpolate in log10 space, since
-    #     # this is probably smoother.
-    #     return 10**self.interp_L(p) # [L_sun]
-    #
-    # def plot_temp(self, fname):
-    #     num = 50
-    #     aa = np.linspace(np.min(self.ages), np.max(self.ages), num=num)
-    #     mm = np.linspace(np.min(self.masses), np.max(self.masses), num=num)
-    #     pp = cartesian([aa, mm]) # List of [[x_0, y_0], [x_1, y_1], ...]
-    #
-    #     tt = self.interp_temp(pp)
-    #
-    #     # Reshape for the sake of an image
-    #     tt.shape = (num, num)
-    #
-    #     # Transpose
-    #     tt = tt.T
-    #
-    #     fig, ax = plt.subplots(nrows=1, figsize=(4,4))
-    #     ext = [np.min(aa), np.max(aa), np.min(mm), np.max(mm)]
-    #     img = ax.imshow(tt, origin="lower", extent=ext, interpolation="none", aspect="auto")
-    #
-    #     ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
-    #     ax.set_xlabel(r"$\tau$ [Myr]")
-    #     ax.set_ylabel(r"$M$ [$M_\odot$]")
-    #     cb = fig.colorbar(img, format="%.0f")
-    #     cb.set_label(r"$T_\textrm{eff}$ [K]")
-    #
-    #     fig.savefig(fname)
-    #
-    # def plot_radius(self, fname):
-    #     num = 50
-    #     aa = np.linspace(np.min(self.ages), np.max(self.ages), num=num)
-    #     mm = np.linspace(np.min(self.masses), np.max(self.masses), num=num)
-    #     pp = cartesian([aa, mm])
-    #
-    #     # print(pp.reshape(num, num))
-    #     rr = self.interp_radius(pp).reshape(num,num).T # Reshape for the sake of an image
-    #
-    #     fig, ax = plt.subplots(nrows=1, figsize=(4,4))
-    #     ext = [np.min(aa), np.max(aa), np.min(mm), np.max(mm)]
-    #     img = ax.imshow(rr, origin="lower", extent=ext, interpolation="none", aspect="auto")
-    #
-    #     ax.plot(self.ages, self.masses, "k.", alpha=0.5, ms=1.0)
-    #     ax.set_xlabel(r"$\tau$ [Myr]")
-    #     ax.set_ylabel(r"$M$ [$M_\odot$]")
-    #     cb = fig.colorbar(img, format="%.1f")
-    #     cb.set_label(r"$R$ [$R_\odot$]")
-    #
-    #     fig.savefig(fname)
-    #
-
-
-
 class DartmouthPMS(Base):
     def __init__(self, age_range, mass_range):
-        super().__init__(name="DartmouthPMS", basefmt="/home/ian/Grad/Research/Stars/ScottiePippen/data/Dartmouth/PMS/fehp00afep0/m{:0>3.0f}fehp00afep0.jc2mass", age_range=age_range, mass_range=mass_range)
+        super().__init__(name="DartmouthPMS", basefmt=SP.data_dir + "Dartmouth/PMS/fehp00afep0/m{:0>3.0f}fehp00afep0.jc2mass", age_range=age_range, mass_range=mass_range)
 
     def load(self):
         # Dartmouth masses
@@ -303,13 +192,10 @@ class DartmouthPMS(Base):
 
         self.points = np.array([self.ages, self.masses]).T
 
-        # self.interp_T = interpND(self.points, self.temps)
-        # self.interp_R = interpND(self.points, self.radii)
-        # self.interp_L = interpND(self.points, self.lums)
 
 class PISA(Base):
     def __init__(self, age_range, mass_range):
-        super().__init__(name="PISA", basefmt="/home/ian/Grad/Research/Stars/ScottiePippen/data/PISA/Z0.02000_Y0.2880_XD2E5_ML1.68_AS05/TRK_M{:.2f}_Z0.02000_Y0.2880_XD2E5_ML1.68_AS05.DAT", age_range=age_range, mass_range=mass_range)
+        super().__init__(name="PISA", basefmt=SP.data_dir + "PISA/Z0.02000_Y0.2880_XD2E5_ML1.68_AS05/TRK_M{:.2f}_Z0.02000_Y0.2880_XD2E5_ML1.68_AS05.DAT", age_range=age_range, mass_range=mass_range)
 
     def load(self):
         masses = np.concatenate((np.arange(0.2, 1., 0.05), np.arange(1.0, 2., 0.1), np.arange(2., 4., 0.2), np.arange(4.0, 7.1, 0.5)))
@@ -354,13 +240,10 @@ class PISA(Base):
 
         self.points = np.array([self.ages, self.masses]).T
 
-        # self.interp_T = interpND(self.points, self.temps)
-        # self.interp_R = interpND(self.points, self.radii)
-        # self.interp_L = interpND(self.points, self.lums)
 
 class Baraffe15(Base):
     def __init__(self, age_range, mass_range):
-        super().__init__(name="Baraffe15", basefmt="/home/ian/Grad/Research/Stars/ScottiePippen/data/Baraffe15/{:.4f}.dat", age_range=age_range, mass_range=mass_range)
+        super().__init__(name="Baraffe15", basefmt=SP.data_dir + "Baraffe15/{:.4f}.dat", age_range=age_range, mass_range=mass_range)
 
     def load(self):
         # In Myr
@@ -406,13 +289,9 @@ class Baraffe15(Base):
 
         self.points = np.array([self.ages, self.masses]).T
 
-        # self.interp_T = interpND(self.points, self.temps)
-        # self.interp_R = interpND(self.points, self.radii)
-        # self.interp_L = interpND(self.points, self.lums)
-
 class Seiss(Base):
     def __init__(self, age_range, mass_range):
-        super().__init__(name="Seiss", basefmt="/home/ian/Grad/Research/Stars/ScottiePippen/data/Seiss/m{:.1f}z02.hrd", age_range=age_range, mass_range=mass_range)
+        super().__init__(name="Seiss", basefmt=SP.data_dir + "Seiss/m{:.1f}z02.hrd", age_range=age_range, mass_range=mass_range)
 
     def load(self):
         # In Myr
@@ -431,10 +310,8 @@ class Seiss(Base):
 
         for mass in masses:
 
-            fname = self.basefmt.format(mass)
-#  model      L (Lo)        Reff (Ro)          Teff               log g                   age (yr)
-#    phase             Mbol           R* (Ro)         rho_eff                M (Mo)
-
+            fname = self.basefmt.format(mass
+            # model, L (Lo), Reff (Ro), Teff, log g, age (yr), phase, Mbol, R* (Ro), rho_eff, M (Mo)
             data = ascii.read(fname, names=["model", "phase", "L", "Mbol", "Reff", "radius", "Teff", "rho_eff", "log g", "M (Mo)", "age"])
 
             age = 1e-6 * data["age"] # [Myr]
@@ -462,10 +339,6 @@ class Seiss(Base):
         self.lums = np.concatenate(lum_list)
 
         self.points = np.array([self.ages, self.masses]).T
-
-        # self.interp_T = interpND(self.points, self.temps)
-        # self.interp_R = interpND(self.points, self.radii)
-        # self.interp_L = interpND(self.points, self.lums)
 
 
 model_dict = {"DartmouthPMS":DartmouthPMS, "PISA":PISA, "Baraffe15": Baraffe15, "Seiss":Seiss}
@@ -525,12 +398,7 @@ def cartesian(arrays, out=None):
 
 def main():
     pass
-    # grid = Seiss(age_range=[1, 100], mass_range=[0.5, 2.0])
-    # grid.load()
-    # grid.scatter_TR()
-    # grid.scatter_AM()
-    # grid.plot_temp()
-    # grid.plot_radius()
+
 
 if __name__=="__main__":
     main()

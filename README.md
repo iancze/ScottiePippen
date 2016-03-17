@@ -13,6 +13,6 @@
 The Dartmouth models provide two different age ranges in separate files.
 
 
-Install this package via
+Install this package in development mode (for now) via
 
-    python setup.py develop
+    pip install -e .
