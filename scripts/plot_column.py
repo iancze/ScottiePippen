@@ -1,13 +1,28 @@
+#!/usr/bin/env python
+
+import argparse
+
+parser = argparse.ArgumentParser(description="Convert literature estimates into T, log10L form.")
+parser.add_argument("--config", default="config.yaml", help="The config file specifying everything we need.")
+args = parser.parse_args()
+
+# Likelihood functions to convert posteriors in weird formats into posteriors on temp, log10 Luminosity for a single star (of a potential binary).
+
+import yaml
+
+f = open(args.config)
+config = yaml.load(f)
+f.close()
+
+
 import numpy as np
-# import matplotlib
-# matplotlib.use("Qt4Agg")
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.ticker import FormatStrFormatter as FSF
 from matplotlib.ticker import MultipleLocator
 from scipy.interpolate import InterpolatedUnivariateSpline as spline
 
-from grids import DartmouthPMS, PISA, Baraffe15, Seiss
+from ScottiePippen.grids import model_dict
 
 # Functon lifted from triangle.py: https://github.com/dfm/triangle.py/
 def hist2d(ax, x, y, sigs=[1,2], color="k", *args, **kwargs):
@@ -37,9 +52,8 @@ def hist2d(ax, x, y, sigs=[1,2], color="k", *args, **kwargs):
                          "have no dynamic range. You could try using the "
                          "`extent` argument.")
 
-    # V = 1.0 - np.exp(-0.5 * np.array([1.0, 2.0, 3.0]) ** 2)
     V = 1.0 - np.exp(-0.5 * np.array(sigs) ** 2)
-    #V = 1.0 - np.exp(-0.5 * np.arange(0.5, 2.1, 0.5) ** 2)
+
     Hflat = H.flatten()
     inds = np.argsort(Hflat)[::-1]
     Hflat = Hflat[inds]
